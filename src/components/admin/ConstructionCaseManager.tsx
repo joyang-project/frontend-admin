@@ -10,6 +10,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { CaseForm } from './cases/CaseForm'
 import { CaseItemCard } from './cases/CaseItemCard'
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
+
 interface CaseItem {
   id: string;
   title: string;
@@ -39,7 +41,7 @@ export default function ConstructionCaseManager() {
 
   const fetchCases = async () => {
     try {
-      const response = await fetch('http://localhost:4000/construction-cases')
+      const response = await fetch(`${API_BASE_URL}/construction-cases`)
       const data = await response.json()
       setItems(data)
       setIsOrderChanged(false)
@@ -63,7 +65,7 @@ export default function ConstructionCaseManager() {
     data.append('description', formData.description || "")
 
     try {
-      const response = await fetch('http://localhost:4000/construction-cases/upload', { 
+      const response = await fetch(`${API_BASE_URL}/construction-cases/upload`, { 
         method: 'POST', 
         body: data 
       })
@@ -96,7 +98,7 @@ export default function ConstructionCaseManager() {
   const handleSaveOrder = async () => {
     setIsSavingOrder(true)
     try {
-      await fetch('http://localhost:4000/construction-cases/reorder', {
+      await fetch(`${API_BASE_URL}/construction-cases/reorder`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: items.map(item => item.id) }),
@@ -108,7 +110,7 @@ export default function ConstructionCaseManager() {
   const confirmDelete = async () => {
     if (!deleteTargetId) return
     try {
-      const response = await fetch(`http://localhost:4000/construction-cases/${deleteTargetId}`, { method: 'DELETE' })
+      const response = await fetch(`${API_BASE_URL}/construction-cases/${deleteTargetId}`, { method: 'DELETE' })
       if (response.ok) { toast.success("삭제되었습니다."); fetchCases(); }
     } catch (error) { toast.error("삭제 실패") } finally { setDeleteTargetId(null) }
   }

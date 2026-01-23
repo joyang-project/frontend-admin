@@ -31,6 +31,11 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/joyang-admin:latest
 
+          build-args: |
+            VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
@@ -44,11 +49,15 @@ jobs:
           script: |
             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/joyang-admin:latest
             
-            docker stop joyang-admin || true
-            docker rm joyang-admin || true
+            if [ "$(docker ps -aq -f name=joyang-admin)" ]; then
+              docker rm -f joyang-admin
+            fi
             
             docker run -d \
               --name joyang-admin \
+              --platform linux/arm64 \
               --restart always \
               -p 5173:80 \
               ${{ secrets.DOCKERHUB_USERNAME }}/joyang-admin:latest
+            
+            docker image prune -f
