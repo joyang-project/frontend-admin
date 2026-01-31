@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
+import type { DropResult } from '@hello-pangea/dnd'
 import { Plus, Save, AlertCircle, Loader2 } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -56,7 +57,6 @@ export default function ConstructionCaseManager() {
       return
     }
     setIsLoading(true)
-    
     const data = new FormData()
     data.append('image', file)
     data.append('title', formData.title)
@@ -69,24 +69,16 @@ export default function ConstructionCaseManager() {
         method: 'POST', 
         body: data 
       })
-      
       if (response.ok) {
         toast.success("등록 완료")
         setFile(null); setPreviewUrl(null)
         setFormData({ title: '', service_type: '가정용', location_tag: '', description: '' })
         setIsDialogOpen(false); fetchCases()
-      } else {
-        const err = await response.json();
-        toast.error("서버 에러", { description: err.message });
       }
-    } catch (error) { 
-      toast.error("네트워크 에러") 
-    } finally { 
-      setIsLoading(false) 
-    }
+    } catch (error) { toast.error("네트워크 에러") } finally { setIsLoading(false) }
   }
 
-  const onDragEnd = (result: any) => {
+  const onDragEnd = (result: DropResult) => {
     if (!result.destination || result.destination.index === result.source.index) return
     const newItems = Array.from(items)
     const [reorderedItem] = newItems.splice(result.source.index, 1)
@@ -95,15 +87,24 @@ export default function ConstructionCaseManager() {
     setIsOrderChanged(true)
   }
 
+  const handleMove = (index: number, direction: 'up' | 'down') => {
+    const newItems = Array.from(items);
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= newItems.length) return;
+    [newItems[index], newItems[targetIndex]] = [newItems[targetIndex], newItems[index]];
+    setItems(newItems);
+    setIsOrderChanged(true);
+  }
+
   const handleSaveOrder = async () => {
     setIsSavingOrder(true)
     try {
-      await fetch(`${API_BASE_URL}/construction-cases/reorder`, {
+      const response = await fetch(`${API_BASE_URL}/construction-cases/reorder`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: items.map(item => item.id) }),
       })
-      toast.success("순서 저장 완료"); setIsOrderChanged(false)
+      if(response.ok) { toast.success("순서 저장 완료"); setIsOrderChanged(false) }
     } catch (error) { toast.error("순서 저장 실패") } finally { setIsSavingOrder(false) }
   }
 
@@ -130,7 +131,7 @@ export default function ConstructionCaseManager() {
             <CardTitle>노출 순서 설정</CardTitle>
             <div className="flex gap-2">
               {isOrderChanged && (
-                <Button onClick={handleSaveOrder} disabled={isSavingOrder} size="sm" className="animate-in fade-in zoom-in">
+                <Button onClick={handleSaveOrder} disabled={isSavingOrder} size="sm">
                   {isSavingOrder ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
                   순서 저장
                 </Button>
@@ -144,16 +145,17 @@ export default function ConstructionCaseManager() {
             <DragDropContext onDragEnd={onDragEnd}>
               <Droppable droppableId="admin-cases">
                 {(provided, snapshot) => (
-                  <div 
-                    {...provided.droppableProps} 
-                    ref={provided.innerRef} 
-                    className={`space-y-3 min-h-[300px] transition-colors duration-200 rounded-lg ${
-                      snapshot.isDraggingOver ? 'bg-muted/30 p-1' : ''
-                    }`}
-                  >
+                  <div {...provided.droppableProps} ref={provided.innerRef} className={`space-y-3 min-h-[300px] rounded-lg ${snapshot.isDraggingOver ? 'bg-muted/30 p-1' : ''}`}>
                     {items.map((item, index) => (
                       <Draggable key={item.id} draggableId={item.id} index={index}>
-                        {(p, s) => <CaseItemCard item={item} provided={p} snapshot={s} onDelete={setDeleteTargetId} />}
+                        {(p, s) => (
+                          <CaseItemCard 
+                            item={item} index={index}
+                            isFirst={index === 0} isLast={index === items.length - 1}
+                            provided={p} snapshot={s} 
+                            onDelete={setDeleteTargetId} onMove={handleMove}
+                          />
+                        )}
                       </Draggable>
                     ))}
                     {provided.placeholder}
@@ -161,7 +163,6 @@ export default function ConstructionCaseManager() {
                 )}
               </Droppable>
             </DragDropContext>
-            {items.length === 0 && <div className="py-24 text-center border-2 border-dashed rounded-lg bg-muted/30 text-muted-foreground text-sm">등록된 사례가 없습니다.</div>}
           </CardContent>
         </Card>
       </div>
@@ -179,7 +180,7 @@ export default function ConstructionCaseManager() {
 
       <AlertDialog open={!!deleteTargetId} onOpenChange={(open) => !open && setDeleteTargetId(null)}>
         <AlertDialogContent>
-          <AlertDialogHeader><div className="flex items-center gap-2 text-destructive mb-2"><AlertCircle className="h-5 w-5" /><AlertDialogTitle>시공 사례 삭제</AlertDialogTitle></div><AlertDialogDescription>정말로 이 시공 사례를 삭제하시겠습니까? 삭제된 데이터와 이미지는 복구할 수 없습니다.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogHeader><div className="flex items-center gap-2 text-destructive mb-2"><AlertCircle className="h-5 w-5" /><AlertDialogTitle>시공 사례 삭제</AlertDialogTitle></div><AlertDialogDescription>정말로 이 시공 사례를 삭제하시겠습니까?</AlertDialogDescription></AlertDialogHeader>
           <AlertDialogFooter><AlertDialogCancel>취소</AlertDialogCancel><AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">삭제하기</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
